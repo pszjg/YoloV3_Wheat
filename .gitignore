@@ -175,3 +175,4 @@ fabric.properties
 venv/
 testing/
 datasets/
+model/saved/
