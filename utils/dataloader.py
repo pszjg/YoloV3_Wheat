@@ -75,8 +75,8 @@ def create_training_instances(
     labels,
 ):
     # Set locations
-    train_annot_folder = "./datsets/" + dataset + "/annots/"
-    train_image_folder = "./datsets/" + dataset + "/images/"
+    train_annot_folder = "./datasets/" + dataset + "/annots/"
+    train_image_folder = "./datasets/" + dataset + "/images/"
 
     # parse annotations of the training set
     train_ints, train_labels = load_annotations(train_annot_folder, train_image_folder, train_cache, labels)

@@ -3,6 +3,11 @@ from model import createModel, callbacks
 import os
 import argparse
 import json
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import keras
+from tensorflow.python.client import device_lib
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description='train and evaluate YOLO_v3 model on any dataset')
@@ -16,7 +21,7 @@ if __name__ == '__main__':
 
     # Load Annotated data
     train_ints, valid_ints, labels, max_box_per_image = dataloader.create_training_instances(
-        config['train']['datset'],
+        config['train']['dataset'],
         config['train']['cache_name'],
         config['valid']['valid_annot_folder'],
         config['valid']['valid_image_folder'],
@@ -26,7 +31,7 @@ if __name__ == '__main__':
     print('\nTraining on: \t' + str(labels) + '\n')
 
     # Generate series of batches
-    train_generator = generator.BatchGenerator(
+    train_set = generator.BatchGenerator(
         instances=train_ints,
         anchors=config['model']['anchors'],
         labels=labels,
@@ -40,7 +45,7 @@ if __name__ == '__main__':
         norm=utils.normalize
     )
 
-    valid_generator = generator.BatchGenerator(
+    valid_set = generator.BatchGenerator(
         instances=valid_ints,
         anchors=config['model']['anchors'],
         labels=labels,
@@ -57,13 +62,13 @@ if __name__ == '__main__':
     # Create a model
     if os.path.exists(config['train']['saved_weights_name']):
         config['train']['warmup_epochs'] = 0
-    warmup_batches = config['train']['warmup_epochs'] * (config['train']['train_times'] * len(train_generator))
+    warmup_batches = config['train']['warmup_epochs'] * (config['train']['train_times'] * len(train_set))
 
     # Set cuda environment
-    os.environ['CUDA_VISIBLE_DEVICES'] = config['train']['gpus']
+    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
     # Create the model
-    train_model, infer_model = createModel.create_model(
+    model, infer_model = createModel.create_model(
         model = config['model']['type'],
         nb_class=len(labels),
         anchors=config['model']['anchors'],
@@ -79,6 +84,7 @@ if __name__ == '__main__':
         noobj_scale=config['train']['noobj_scale'],
         xywh_scale=config['train']['xywh_scale'],
         class_scale=config['train']['class_scale'],
+        optimiser="Adam",
     )
 
     ###############################
@@ -86,9 +92,9 @@ if __name__ == '__main__':
     ###############################
     callbacks = callbacks.create_callbacks(config['train']['saved_weights_name'], config['train']['tensorboard_dir'], infer_model)
 
-    train_model.fit_generator(
-        generator=train_generator,
-        steps_per_epoch=len(train_generator) * config['train']['train_times'],
+    history = model.fit_generator(
+        generator=train_set,
+        steps_per_epoch=len(train_set) * config['train']['train_times'],
         epochs=config['train']['nb_epochs'] + config['train']['warmup_epochs'],
         verbose=2 if config['train']['debug'] else 1,
         callbacks=callbacks,
@@ -96,11 +102,31 @@ if __name__ == '__main__':
         max_queue_size=8
     )
 
+    # grab the history object dictionary
+    H = history.history
+
+    # plot the training loss and accuracy
+    N = np.arange(0, len(H["loss"]))
+    plt.style.use("ggplot")
+    plt.figure()
+    plt.plot(N, H["loss"], label="train_loss")
+    plt.plot(N, H["val_loss"], label="test_loss")
+    plt.plot(N, H["acc"], label="train_acc")
+    plt.plot(N, H["val_acc"], label="test_acc")
+    plt.title("MiniGoogLeNet on CIFAR-10")
+    plt.xlabel("Epoch #")
+    plt.ylabel("Loss/Accuracy")
+    plt.legend()
+
+    # save the figure
+    plt.savefig(args["output"])
+    plt.close()
+
     ###############################
     #   Run the evaluation
     ###############################
     # compute mAP for all the classes
-    average_precisions = utils.evaluate(infer_model, valid_generator)
+    average_precisions = utils.evaluate(infer_model, valid_set)
 
     # print the score
     for label, average_precision in average_precisions.items():

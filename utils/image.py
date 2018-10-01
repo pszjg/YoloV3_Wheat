@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import copy
+from skimage import util
+import random as rand
 
 def _rand_scale(scale):
     scale = np.random.uniform(1, scale)
@@ -83,4 +85,42 @@ def apply_random_scale_and_crop(image, new_w, new_h, net_w, net_h, dx, dy):
     if (new_h + dy) < net_h:
         im_sized = np.pad(im_sized, ((0, net_h - (new_h+dy)), (0,0), (0,0)), mode='constant', constant_values=127)
         
-    return im_sized[:net_h, :net_w,:]     
+    return im_sized[:net_h, :net_w,:]
+
+def apply_color_invert(image):
+    return util.invert(image)
+
+def apply_blur(image):
+    return cv2.medianBlur(image,3)
+
+def add_noise(noise_typ,image):
+    if noise_typ == "gauss":
+        row, col, ch= image.shape
+        gauss = np.random.normal(rand.uniform(0, 0.3), rand.uniform(0.1, 0.5), (row, col, ch))
+        gauss = gauss.reshape(row, col, ch)
+        noisy = image + gauss
+        return noisy
+    elif noise_typ == "s&p":
+        s_vs_p = 0.5
+        amount = 0.004
+        out = np.copy(image)
+        # Salt mode
+        num_salt = np.ceil(amount * image.size * s_vs_p)
+        coords = [np.random.randint(0, i - 1, int(num_salt)) for i in image.shape]
+        out[coords] = 1
+        # Pepper mode
+        num_pepper = np.ceil(amount* image.size * (1. - s_vs_p))
+        coords = [np.random.randint(0, i - 1, int(num_pepper)) for i in image.shape]
+        out[coords] = 0
+        return out
+    elif noise_typ == "poisson":
+        vals = len(np.unique(image))
+        vals = 2 ** np.ceil(np.log2(vals))
+        noisy = np.random.poisson(image * vals) / float(vals)
+        return noisy
+    elif noise_typ =="speckle":
+        row, col, ch = image.shape
+        gauss = np.random.randn(row, col, ch)
+        gauss = gauss.reshape(row, col, ch)
+        noisy = image + image * gauss
+        return noisy

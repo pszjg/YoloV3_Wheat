@@ -1,7 +1,6 @@
 from model.YoloV3 import create_yolov3_model, dummy_loss
 import os
-from keras.optimizers import Adam
-
+from keras.optimizers import Adam, SGD, RMSprop
 
 def create_model(
     model,
@@ -17,7 +16,8 @@ def create_model(
     obj_scale,
     noobj_scale,
     xywh_scale,
-    class_scale
+    class_scale,
+    optimiser
 ):
     if model == "YoloV3":
         template_model, infer_model = create_yolov3_model(
@@ -47,7 +47,16 @@ def create_model(
 
     train_model = template_model
 
-    optimizer = Adam(lr=lr, clipnorm=0.001)
+    if optimiser == "Adam":
+        optimizer = Adam(lr=lr, clipnorm=0.001)
+    elif optimiser == "SGD":
+        optimizer = SGD(lr=5e-3, momentum=0.9)
+    elif optimiser == "RMSProp":
+        optimizer = RMSprop(0.001, 0.9, None)
+    else:
+        print("Optimizer not found")
+        return None
+
     train_model.compile(loss=dummy_loss, optimizer=optimizer)
 
     return train_model, infer_model
