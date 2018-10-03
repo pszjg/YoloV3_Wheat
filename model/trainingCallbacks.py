@@ -28,7 +28,7 @@ def create_callbacks(saved_weights_name, tensorboard_logs, model_to_save):
         patience=2,
         verbose=1,
         mode='min',
-        min_delta=0.01,
+        epsilon=0.01,
         cooldown=0,
         min_lr=0
     )
@@ -48,8 +48,8 @@ class CustomTensorBoard(TensorBoard):
         self.counter = 0
     
     def on_batch_end(self, batch, logs=None):
-        self.counter+=1
-        if self.counter%self.log_every==0:
+        self.counter += 1
+        if self.counter % self.log_every == 0:
             for name, value in logs.items():
                 if name in ['batch', 'size']:
                     continue

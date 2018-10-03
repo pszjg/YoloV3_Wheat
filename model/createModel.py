@@ -1,6 +1,8 @@
 from model.YoloV3 import create_yolov3_model, dummy_loss
 import os
 from keras.optimizers import Adam, SGD, RMSprop
+from colorama import init, Fore
+
 
 def create_model(
     model,
@@ -19,6 +21,9 @@ def create_model(
     class_scale,
     optimiser
 ):
+    # Initialise color
+    init()
+
     if model == "YoloV3":
         template_model, infer_model = create_yolov3_model(
             nb_class            = nb_class,
@@ -35,14 +40,15 @@ def create_model(
             class_scale         = class_scale
         )
     else:
-        print("Error, model " + model + " not found. Currently support YoloV3")
+        print(Fore.RED + "Error: model " + model + " not found. Currently support YoloV3" + Fore.RESET)
         return None
 
     # load the pretrained weight if exists, otherwise load the backend weight only
     if os.path.exists(saved_weights_name):
-        print("\nLoading pretrained weights.\n")
+        print(Fore.GREEN + "\nLoading pretrained weights " + saved_weights_name + "\n" + Fore.RESET)
         template_model.load_weights(saved_weights_name)
     else:
+        print(Fore.GREEN + "\nLoading default weights backend.h5\n" + Fore.RESET)
         template_model.load_weights("backend.h5", by_name=True)
 
     train_model = template_model
@@ -54,7 +60,7 @@ def create_model(
     elif optimiser == "RMSProp":
         optimizer = RMSprop(0.001, 0.9, None)
     else:
-        print("Optimizer not found")
+        print(Fore.RED + "Error: Optimizer not found" + Fore.RESET)
         return None
 
     train_model.compile(loss=dummy_loss, optimizer=optimizer)

@@ -4,20 +4,24 @@
         "min_input_size":       288,
         "max_input_size":       448,
         "anchors":              [10,21, 12,20, 13,22, 14,18, 14,21, 14,24, 16,20, 17,22, 21,14],
-        "labels":               ["Ear Tips"]
+        "labels":               ["ear"]
     },
 
     "train": {
-        "dataset"           :   "Paragon",
-        "cache_name":           "Paragon.pkl",
+        "dataset":              "Ears",
+        "train_image_folder":   "./Ears/images/",
+        "train_annot_folder":   "./Ears/annots/",
+        "cache_name":           "Ears.pkl",
 
-        "train_times":          1,
-        "batch_size":           6,
+        "optimizer":            "RMSProp",
+
+        "train_times":          2,
+        "batch_size":           5,
         "learning_rate":        1e-4,
-        "nb_epochs":            10,
-        "warmup_epochs":        3,
+        "nb_epochs":            150,
+        "warmup_epochs":        0,
         "ignore_thresh":        0.5,
-        "gpus":                 "1",
+        "gpus":                 "0",
 
         "grid_scales":          [1,1,1],
         "obj_scale":            5,
@@ -26,8 +30,8 @@
         "class_scale":          1,
 
         "tensorboard_dir":      "logs",
-        "saved_weights_name":   "Paragon.h5",
-        "debug":                false
+        "saved_weights_name":   "Ears.h5",
+        "debug":                0
     },
 
     "valid": {
@@ -38,3 +42,4 @@
         "valid_times":          1
     }
 }
+

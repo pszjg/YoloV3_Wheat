@@ -1,8 +1,9 @@
-from keras.layers import Conv2D, Input, BatchNormalization, LeakyReLU, ZeroPadding2D, UpSampling2D, Lambda
+from keras.layers import Conv2D, Input, BatchNormalization, LeakyReLU, ZeroPadding2D, UpSampling2D
 from keras.layers.merge import add, concatenate
 from keras.models import Model
 from keras.engine.topology import Layer
 import tensorflow as tf
+
 
 class YoloLayer(Layer):
     def __init__(self, anchors, max_grid, batch_size, warmup_batches, ignore_thresh, 
@@ -27,8 +28,10 @@ class YoloLayer(Layer):
 
         super(YoloLayer, self).__init__(**kwargs)
 
+
     def build(self, input_shape):
         super(YoloLayer, self).build(input_shape)  # Be sure to call this somewhere!
+
 
     def call(self, x):
         input_image, y_pred, y_true, true_boxes = x
@@ -193,6 +196,7 @@ class YoloLayer(Layer):
 
     def compute_output_shape(self, input_shape):
         return [(None, 1)]
+
 
 def _conv_block(inp, convs, do_skip=True):
     x = inp
@@ -359,6 +363,7 @@ def create_yolov3_model(
     infer_model = Model(input_image, [pred_yolo_1, pred_yolo_2, pred_yolo_3])
 
     return [train_model, infer_model]
+
 
 def dummy_loss(y_true, y_pred):
     return tf.sqrt(tf.reduce_sum(y_pred))

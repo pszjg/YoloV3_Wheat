@@ -1,25 +1,13 @@
 import cv2
-import copy
 import numpy as np
 from keras.utils import Sequence
 from utils.bbox import BoundBox, bbox_iou
 from utils.image import apply_random_scale_and_crop, random_distort_image, random_flip, correct_bounding_boxes
 
 
-class BatchGenerator(Sequence):
-    def __init__(self,
-                 instances,
-                 anchors,
-                 labels,
-                 downsample=32,  # ratio between network input's size and network output's size, 32 for YOLOv3
-                 max_box_per_image=30,
-                 batch_size=1,
-                 min_net_size=320,
-                 max_net_size=608,
-                 shuffle=True,
-                 jitter=True,
-                 norm=None
-                 ):
+class GenerateBatch(Sequence):
+    # Downsample: # ratio between network input's size and network output's size, 32 for YOLOv3
+    def __init__(self, instances, anchors, labels, downsample=32, max_box_per_image=30, batch_size=1, min_net_size=320, max_net_size=608, shuffle=True, jitter=True, norm=None):
         self.instances = instances
         self.batch_size = batch_size
         self.labels = labels
@@ -34,7 +22,8 @@ class BatchGenerator(Sequence):
         self.net_h = 416
         self.net_w = 416
 
-        if shuffle: np.random.shuffle(self.instances)
+        if shuffle:
+            np.random.shuffle(self.instances)
 
     def __len__(self):
         return int(np.ceil(float(len(self.instances)) / self.batch_size))
@@ -67,7 +56,6 @@ class BatchGenerator(Sequence):
 
         instance_count = 0
         true_box_index = 0
-
         # do the logic to fill in the inputs and the output
         for train_instance in self.instances[l_bound:r_bound]:
             # augment input image and fix object's position and size
@@ -135,11 +123,11 @@ class BatchGenerator(Sequence):
             else:
                 # plot image and bounding boxes for sanity check
                 for obj in all_objs:
-                    cv2.rectangle(img, (obj['xmin'], obj['ymin']), (obj['xmax'], obj['ymax']), (255, 0, 0), 3)
+                    cv2.rectangle(img, (obj['xmin'], obj['ymin']), (obj['xmax'], obj['ymax']), (255, 0, 0), 2)
                     cv2.putText(img, obj['name'],
                                 (obj['xmin'] + 2, obj['ymin'] + 12),
                                 0, 1.2e-3 * img.shape[0],
-                                (0, 255, 0), 2)
+                                (0, 255, 0), 1)
 
                 x_batch[instance_count] = img
 
@@ -150,9 +138,8 @@ class BatchGenerator(Sequence):
 
     def _get_net_size(self, idx):
         if idx % 10 == 0:
-            net_size = self.downsample * np.random.randint(self.min_net_size / self.downsample, \
-                                                           self.max_net_size / self.downsample + 1)
-            print("resizing: ", net_size, net_size)
+            net_size = self.downsample * np.random.randint(int(self.min_net_size / self.downsample), int(self.max_net_size / self.downsample + 1))
+            #print("resizing: ", net_size, net_size)
             self.net_h, self.net_w = net_size, net_size
         return self.net_h, self.net_w
 
@@ -160,27 +147,28 @@ class BatchGenerator(Sequence):
         image_name = instance['filename']
         image = cv2.imread(image_name)  # RGB image
 
-        if image is None: print('Cannot find ', image_name)
+        if image is None:
+            print('Cannot find ', image_name)
         image = image[:, :, ::-1]  # RGB image
 
         image_h, image_w, _ = image.shape
 
         # determine the amount of scaling and cropping
-        dw = self.jitter * image_w;
-        dh = self.jitter * image_h;
+        dw = self.jitter * image_w
+        dh = self.jitter * image_h
 
-        new_ar = (image_w + np.random.uniform(-dw, dw)) / (image_h + np.random.uniform(-dh, dh));
-        scale = np.random.uniform(0.25, 2);
+        new_ar = (image_w + np.random.uniform(-dw, dw)) / (image_h + np.random.uniform(-dh, dh))
+        scale = np.random.uniform(0.25, 2)
 
-        if (new_ar < 1):
-            new_h = int(scale * net_h);
-            new_w = int(net_h * new_ar);
+        if new_ar < 1:
+            new_h = int(scale * net_h)
+            new_w = int(net_h * new_ar)
         else:
-            new_w = int(scale * net_w);
-            new_h = int(net_w / new_ar);
+            new_w = int(scale * net_w)
+            new_h = int(net_w / new_ar)
 
-        dx = int(np.random.uniform(0, net_w - new_w));
-        dy = int(np.random.uniform(0, net_h - new_h));
+        dx = int(np.random.uniform(0, net_w - new_w))
+        dy = int(np.random.uniform(0, net_h - new_h))
 
         # apply scaling and cropping
         im_sized = apply_random_scale_and_crop(image, new_w, new_h, net_w, net_h, dx, dy)
@@ -221,7 +209,8 @@ class BatchGenerator(Sequence):
             annot = [obj['xmin'], obj['ymin'], obj['xmax'], obj['ymax'], self.labels.index(obj['name'])]
             annots += [annot]
 
-        if len(annots) == 0: annots = [[]]
+        if len(annots) == 0:
+            annots = [[]]
 
         return np.array(annots)
 

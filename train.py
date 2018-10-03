@@ -1,26 +1,24 @@
-from utils import dataloader, utils, generator
-from model import createModel, callbacks
+from utils import dataLoader, utils, batchCreator
+from model import createModel, trainingCallbacks
 import os
 import argparse
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorflow as tf
-import keras
-from tensorflow.python.client import device_lib
+from colorama import init, Fore
 
-if __name__ == '__main__':
-    argparser = argparse.ArgumentParser(description='train and evaluate YOLO_v3 model on any dataset')
-    argparser.add_argument('-c', '--conf', help='path to configuration file')
 
-    args = argparser.parse_args()
+def _main_(args):
     config_path = args.conf
 
     with open(config_path) as config_buffer:
         config = json.loads(config_buffer.read())
 
+    # Initialise colorama
+    init()
+
     # Load Annotated data
-    train_ints, valid_ints, labels, max_box_per_image = dataloader.create_training_instances(
+    train_ints, valid_ints, labels, max_box_per_image = dataLoader.create_training_instances(
         config['train']['dataset'],
         config['train']['cache_name'],
         config['valid']['valid_annot_folder'],
@@ -28,11 +26,12 @@ if __name__ == '__main__':
         config['valid']['cache_name'],
         config['model']['labels']
     )
-    print('\nTraining on: \t' + str(labels) + '\n')
+
+    print(Fore.LIGHTGREEN_EX + 'Training on: \t' + Fore.RESET + str(labels) + '\n')
 
     # Generate series of batches
-    train_set = generator.BatchGenerator(
-        instances=train_ints,
+    training_set = batchCreator.GenerateBatch(
+        instances=train_ints, # Images of training set
         anchors=config['model']['anchors'],
         labels=labels,
         downsample=32,  # ratio between network input's size and network output's size, 32 for YOLOv3
@@ -45,7 +44,7 @@ if __name__ == '__main__':
         norm=utils.normalize
     )
 
-    valid_set = generator.BatchGenerator(
+    validiation_set = batchCreator.GenerateBatch(
         instances=valid_ints,
         anchors=config['model']['anchors'],
         labels=labels,
@@ -62,10 +61,7 @@ if __name__ == '__main__':
     # Create a model
     if os.path.exists(config['train']['saved_weights_name']):
         config['train']['warmup_epochs'] = 0
-    warmup_batches = config['train']['warmup_epochs'] * (config['train']['train_times'] * len(train_set))
-
-    # Set cuda environment
-    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+    warmup_batches = config['train']['warmup_epochs'] * (config['train']['train_times'] * len(training_set))
 
     # Create the model
     model, infer_model = createModel.create_model(
@@ -84,23 +80,38 @@ if __name__ == '__main__':
         noobj_scale=config['train']['noobj_scale'],
         xywh_scale=config['train']['xywh_scale'],
         class_scale=config['train']['class_scale'],
-        optimiser="Adam",
+        optimiser=config['train']['optimizer'],
     )
 
     ###############################
     #   Kick off the training
     ###############################
-    callbacks = callbacks.create_callbacks(config['train']['saved_weights_name'], config['train']['tensorboard_dir'], infer_model)
+    callbacks = trainingCallbacks.create_callbacks(
+        config['train']['saved_weights_name'],
+        config['train']['tensorboard_dir'],
+        infer_model
+    )
 
     history = model.fit_generator(
-        generator=train_set,
-        steps_per_epoch=len(train_set) * config['train']['train_times'],
+        generator=training_set,
+        steps_per_epoch=len(training_set) * config['train']['train_times'],
         epochs=config['train']['nb_epochs'] + config['train']['warmup_epochs'],
-        verbose=2 if config['train']['debug'] else 1,
+        verbose=config['train']['debug'],
         callbacks=callbacks,
         workers=4,
         max_queue_size=8
     )
+
+    ###############################
+    #   Run the evaluation
+    ###############################
+    # compute mAP for all the classes
+    average_precisions = utils.evaluate(infer_model, validiation_set)
+
+    # print the score
+    for label, average_precision in average_precisions.items():
+        print(labels[label] + ': {:.4f}'.format(average_precision))
+    print('mAP: {:.4f}'.format(sum(average_precisions.values()) / len(average_precisions)))
 
     # grab the history object dictionary
     H = history.history
@@ -113,7 +124,7 @@ if __name__ == '__main__':
     plt.plot(N, H["val_loss"], label="test_loss")
     plt.plot(N, H["acc"], label="train_acc")
     plt.plot(N, H["val_acc"], label="test_acc")
-    plt.title("MiniGoogLeNet on CIFAR-10")
+    plt.title("Training Results")
     plt.xlabel("Epoch #")
     plt.ylabel("Loss/Accuracy")
     plt.legend()
@@ -122,13 +133,15 @@ if __name__ == '__main__':
     plt.savefig(args["output"])
     plt.close()
 
-    ###############################
-    #   Run the evaluation
-    ###############################
-    # compute mAP for all the classes
-    average_precisions = utils.evaluate(infer_model, valid_set)
+if __name__ == '__main__':
+    # Disable tensorFlow debug information
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-    # print the score
-    for label, average_precision in average_precisions.items():
-        print(labels[label] + ': {:.4f}'.format(average_precision))
-    print('mAP: {:.4f}'.format(sum(average_precisions.values()) / len(average_precisions)))
+    # Set cuda environment
+    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+
+    argparser = argparse.ArgumentParser(description='train and evaluate YOLO_v3 model on any dataset')
+    argparser.add_argument('-c', '--conf', help='path to configuration file')
+
+    args = argparser.parse_args()
+    _main_(args)
