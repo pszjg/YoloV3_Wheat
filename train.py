@@ -1,5 +1,5 @@
-from utils import dataLoader, utils, batchCreator
-from model import createModel, trainingCallbacks
+from utils import data_loader, utils, batch
+from model import model_create, callbacks_create
 import os
 import argparse
 import json
@@ -18,7 +18,7 @@ def _main_(args):
     init()
 
     # Load Annotated data
-    train_ints, valid_ints, labels, max_box_per_image = dataLoader.create_training_instances(
+    train_ints, valid_ints, labels, max_box_per_image = data_loader.create_training_instances(
         config['train']['dataset'],
         config['train']['cache_name'],
         config['valid']['valid_annot_folder'],
@@ -30,8 +30,8 @@ def _main_(args):
     print(Fore.LIGHTGREEN_EX + 'Training on: \t' + Fore.RESET + str(labels) + '\n')
 
     # Generate series of batches
-    training_set = batchCreator.GenerateBatch(
-        instances=train_ints, # Images of training set
+    training_set = batch.GenerateBatch(
+        instances=train_ints,  # Images of training set
         anchors=config['model']['anchors'],
         labels=labels,
         downsample=32,  # ratio between network input's size and network output's size, 32 for YOLOv3
@@ -40,11 +40,11 @@ def _main_(args):
         min_net_size=config['model']['min_input_size'],
         max_net_size=config['model']['max_input_size'],
         shuffle=True,
-        jitter=0.2,
+        jitter=0.05,
         norm=utils.normalize
     )
 
-    validiation_set = batchCreator.GenerateBatch(
+    validiation_set = batch.GenerateBatch(
         instances=valid_ints,
         anchors=config['model']['anchors'],
         labels=labels,
@@ -64,8 +64,8 @@ def _main_(args):
     warmup_batches = config['train']['warmup_epochs'] * (config['train']['train_times'] * len(training_set))
 
     # Create the model
-    model, infer_model = createModel.create_model(
-        model = config['model']['type'],
+    model, infer_model = model_create.create_model(
+        model=config['model']['type'],
         nb_class=len(labels),
         anchors=config['model']['anchors'],
         max_box_per_image=max_box_per_image,
@@ -86,7 +86,7 @@ def _main_(args):
     ###############################
     #   Kick off the training
     ###############################
-    callbacks = trainingCallbacks.create_callbacks(
+    callbacks = callbacks_create.create_callbacks(
         config['train']['saved_weights_name'],
         config['train']['tensorboard_dir'],
         infer_model
@@ -114,24 +114,21 @@ def _main_(args):
     print('mAP: {:.4f}'.format(sum(average_precisions.values()) / len(average_precisions)))
 
     # grab the history object dictionary
-    H = history.history
-
+    hist = history.history
     # plot the training loss and accuracy
-    N = np.arange(0, len(H["loss"]))
+    numpy_plot = np.arange(0, len(hist["loss"]))
     plt.style.use("ggplot")
     plt.figure()
-    plt.plot(N, H["loss"], label="train_loss")
-    plt.plot(N, H["val_loss"], label="test_loss")
-    plt.plot(N, H["acc"], label="train_acc")
-    plt.plot(N, H["val_acc"], label="test_acc")
+    plt.plot(numpy_plot, hist["loss"], label="train_loss")
     plt.title("Training Results")
     plt.xlabel("Epoch #")
     plt.ylabel("Loss/Accuracy")
     plt.legend()
 
     # save the figure
-    plt.savefig(args["output"])
+    plt.savefig("D:/0.Projects/YoloV3_Wheat/loss.png")
     plt.close()
+
 
 if __name__ == '__main__':
     # Disable tensorFlow debug information
@@ -142,6 +139,6 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser(description='train and evaluate YOLO_v3 model on any dataset')
     argparser.add_argument('-c', '--conf', help='path to configuration file')
+    argparser.add_argument('-o', '--output', help='path to output directory')
 
-    args = argparser.parse_args()
-    _main_(args)
+    _main_(argparser.parse_args())

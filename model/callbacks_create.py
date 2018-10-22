@@ -3,13 +3,14 @@ import tensorflow as tf
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from utils.utils import makedirs
 
+
 def create_callbacks(saved_weights_name, tensorboard_logs, model_to_save):
     makedirs(tensorboard_logs)
 
     early_stop = EarlyStopping(
         monitor='loss',
         min_delta=0.01,
-        patience=5,
+        patience=15,
         mode='min',
         verbose=1
     )
@@ -25,7 +26,7 @@ def create_callbacks(saved_weights_name, tensorboard_logs, model_to_save):
     reduce_on_plateau = ReduceLROnPlateau(
         monitor='loss',
         factor=0.1,
-        patience=2,
+        patience=5,
         verbose=1,
         mode='min',
         epsilon=0.01,
@@ -38,6 +39,7 @@ def create_callbacks(saved_weights_name, tensorboard_logs, model_to_save):
         write_images=True,
     )
     return [early_stop, checkpoint, reduce_on_plateau, tensorboard]
+
 
 class CustomTensorBoard(TensorBoard):
     """ to log the loss after each batch
@@ -62,6 +64,7 @@ class CustomTensorBoard(TensorBoard):
         
         super(CustomTensorBoard, self).on_batch_end(batch, logs)
 
+
 class CustomModelCheckpoint(ModelCheckpoint):
     """ to save the template model, not the multi-GPU model
     """
@@ -78,8 +81,7 @@ class CustomModelCheckpoint(ModelCheckpoint):
             if self.save_best_only:
                 current = logs.get(self.monitor)
                 if current is None:
-                    warnings.warn('Can save best model only with %s available, '
-                                  'skipping.' % (self.monitor), RuntimeWarning)
+                    warnings.warn('Can save best model only with %s available, ' 'skipping.' % (self.monitor), RuntimeWarning)
                 else:
                     if self.monitor_op(current, self.best):
                         if self.verbose > 0:

@@ -2,7 +2,11 @@ import cv2
 import numpy as np
 from keras.utils import Sequence
 from utils.bbox import BoundBox, bbox_iou
-from utils.image import apply_random_scale_and_crop, random_distort_image, random_flip, correct_bounding_boxes
+import utils.image_aug as aug
+from utils.image_aug import ImageAugmentation
+import random
+from PIL import Image
+import copy
 
 
 class GenerateBatch(Sequence):
@@ -19,9 +23,9 @@ class GenerateBatch(Sequence):
         self.jitter = jitter
         self.norm = norm
         self.anchors = [BoundBox(0, 0, anchors[2 * i], anchors[2 * i + 1]) for i in range(len(anchors) // 2)]
-        self.net_h = 416
-        self.net_w = 416
-
+        self.net_h = 576
+        self.net_w = 576
+        self.perform_augmentation = ImageAugmentation()
         if shuffle:
             np.random.shuffle(self.instances)
 
@@ -60,17 +64,14 @@ class GenerateBatch(Sequence):
         for train_instance in self.instances[l_bound:r_bound]:
             # augment input image and fix object's position and size
             img, all_objs = self._aug_image(train_instance, net_h, net_w)
-
+            # print("/r" + train_instance['filename'])
             for obj in all_objs:
                 # find the best anchor box for this object
                 max_anchor = None
                 max_index = -1
                 max_iou = -1
 
-                shifted_box = BoundBox(0,
-                                       0,
-                                       obj['xmax'] - obj['xmin'],
-                                       obj['ymax'] - obj['ymin'])
+                shifted_box = BoundBox(0, 0, obj['xmax'] - obj['xmin'], obj['ymax'] - obj['ymin'])
 
                 for i in range(len(self.anchors)):
                     anchor = self.anchors[i]
@@ -81,7 +82,7 @@ class GenerateBatch(Sequence):
                         max_index = i
                         max_iou = iou
 
-                        # determine the yolo to be responsible for this bounding box
+                # determine the yolo to be responsible for this bounding box
                 yolo = yolos[max_index // 3]
                 grid_h, grid_w = yolo.shape[1:3]
 
@@ -118,7 +119,7 @@ class GenerateBatch(Sequence):
                 true_box_index = true_box_index % self.max_box_per_image
 
                 # assign input image to x_batch
-            if self.norm != None:
+            if self.norm is not None:
                 x_batch[instance_count] = self.norm(img)
             else:
                 # plot image and bounding boxes for sanity check
@@ -139,54 +140,98 @@ class GenerateBatch(Sequence):
     def _get_net_size(self, idx):
         if idx % 10 == 0:
             net_size = self.downsample * np.random.randint(int(self.min_net_size / self.downsample), int(self.max_net_size / self.downsample + 1))
-            #print("resizing: ", net_size, net_size)
+            # print("resizing: ", net_size, net_size)
             self.net_h, self.net_w = net_size, net_size
         return self.net_h, self.net_w
 
     def _aug_image(self, instance, net_h, net_w):
         image_name = instance['filename']
-        image = cv2.imread(image_name)  # RGB image
+        boxes = copy.deepcopy(instance['object'])
+        # Open image
+        pil_image = Image.open(image_name).convert('RGB')
 
-        if image is None:
-            print('Cannot find ', image_name)
+        # Perform random crop with upper bounds of 1152
+        if pil_image.size[0] > 1152 and pil_image.size[1] > 1152:
+            rand_x_width = random.randint(576, 1152)
+            rand_y_height = random.randint(576, 1152)
+            minx = random.randint(1, pil_image.size[0] - rand_x_width)
+            miny = random.randint(1, pil_image.size[1] - rand_y_height)
+
+            maxx = minx + rand_x_width
+            maxy = miny + rand_y_height
+
+            box = (minx, miny, maxx, maxy)
+            pil_image = pil_image.crop(box)
+
+            new_boxes = []
+
+            for bounding in boxes:
+                x_min = bounding['xmin']
+                x_max = bounding['xmax']
+                y_min = bounding['ymin']
+                y_max = bounding['ymax']
+
+                if x_min >= minx and x_min <= maxx and x_max >= minx and x_max <= maxx and y_min >= miny and y_min <= maxy and y_max >= miny and y_max <= maxy:
+                    temp_box = copy.deepcopy(bounding)
+                    temp_box['ymin'] = y_min - miny
+                    temp_box['xmin'] = x_min - minx
+                    temp_box['ymax'] = y_max - miny
+                    temp_box['xmax'] = x_max - minx
+                    new_boxes.append(temp_box)
+
+            boxes = new_boxes
+
+        # Original dimensions of image
+        width_ = pil_image.size[0]
+        height_ = pil_image.size[1]
+
+        # Resize image to network
+        new_w, new_h, pil_image = aug.transform_resize_image(pil_image, net_w)
+
+        # Perform image augmentation
+        pil_image = self.perform_augmentation.randomise_image(pil_image)
+
+        # Increase to network size
+        image = Image.new('RGB', (net_w, net_h), (255, 255, 255))
+        image.paste(pil_image, (0, 0))
+        pil_image = image
+
+        # Apply transformation augmentations
+        scale = 1  # Scale performed by randomly cropping
+        flip = random.randint(0, 1)
+        rotate = 0
+
+        # Scale
+        pil_image = aug.transform_zoom(pil_image, scale)
+
+        # Rotate
+        rotation = 0
+        if rotate == 1:
+            rotation = random.randint(0, 3) * 90
+            pil_image = aug.transform_rotate(pil_image, rotation)
+
+        # Flip
+        if flip == 1:
+            pil_image = aug.transform_flip(pil_image)
+
+        # Update bounding boxes
+        all_objs = aug.correct_bounding_boxes(boxes, new_w, new_h, net_w, net_h, flip, scale, width_, height_, rotation)
+
+        # Display bounding boxes on images
+        # pil_image = aug.print_bounding_boxes(pil_image, all_objs)
+
+        # Image to numpy array
+        image = np.array(pil_image)
         image = image[:, :, ::-1]  # RGB image
 
-        image_h, image_w, _ = image.shape
+        # name = os.path.basename(instance['filename'])
+        # cv2.imwrite('./testing/printed/' + str(name) + '.jpg', image)
 
-        # determine the amount of scaling and cropping
-        dw = self.jitter * image_w
-        dh = self.jitter * image_h
-
-        new_ar = (image_w + np.random.uniform(-dw, dw)) / (image_h + np.random.uniform(-dh, dh))
-        scale = np.random.uniform(0.25, 2)
-
-        if new_ar < 1:
-            new_h = int(scale * net_h)
-            new_w = int(net_h * new_ar)
-        else:
-            new_w = int(scale * net_w)
-            new_h = int(net_w / new_ar)
-
-        dx = int(np.random.uniform(0, net_w - new_w))
-        dy = int(np.random.uniform(0, net_h - new_h))
-
-        # apply scaling and cropping
-        im_sized = apply_random_scale_and_crop(image, new_w, new_h, net_w, net_h, dx, dy)
-
-        # randomly distort hsv space
-        im_sized = random_distort_image(im_sized)
-
-        # randomly flip
-        flip = np.random.randint(2)
-        im_sized = random_flip(im_sized, flip)
-
-        # correct the size and pos of bounding boxes
-        all_objs = correct_bounding_boxes(instance['object'], new_w, new_h, net_w, net_h, dx, dy, flip, image_w, image_h)
-
-        return im_sized, all_objs
+        return image, all_objs
 
     def on_epoch_end(self):
-        if self.shuffle: np.random.shuffle(self.instances)
+        if self.shuffle:
+            np.random.shuffle(self.instances)
 
     def num_classes(self):
         return len(self.labels)
@@ -201,18 +246,3 @@ class GenerateBatch(Sequence):
             anchors += [anchor.xmax, anchor.ymax]
 
         return anchors
-
-    def load_annotation(self, i):
-        annots = []
-
-        for obj in self.instances[i]['object']:
-            annot = [obj['xmin'], obj['ymin'], obj['xmax'], obj['ymax'], self.labels.index(obj['name'])]
-            annots += [annot]
-
-        if len(annots) == 0:
-            annots = [[]]
-
-        return np.array(annots)
-
-    def load_image(self, i):
-        return cv2.imread(self.instances[i]['filename'])

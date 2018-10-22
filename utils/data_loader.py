@@ -59,10 +59,8 @@ def load_annotations(ann_dir, img_dir, cache_name, labels=[]):
     else:
         all_insts = []
         seen_labels = {}
-
         for ann in sorted(os.listdir(ann_dir)):
             img = {'object': []}
-
             try:
                 tree = ET.parse(ann_dir + ann)
             except Exception as e:
@@ -105,7 +103,9 @@ def load_annotations(ann_dir, img_dir, cache_name, labels=[]):
                                 if 'ymax' in dim.tag:
                                     obj['ymax'] = int(round(float(dim.text)))
 
+
             if len(img['object']) > 0:
+                #img['object'] = [ob for ob in img['object'] if (ob['xmax'] - ob['xmin']) > 20 or (ob['ymax'] - ob['ymin']) > 20]
                 all_insts += [img]
 
         cache = {'all_insts': all_insts, 'seen_labels': seen_labels}

@@ -49,7 +49,7 @@ def create_model(
         template_model.load_weights(saved_weights_name)
     else:
         print(Fore.GREEN + "\nLoading default weights backend.h5\n" + Fore.RESET)
-        template_model.load_weights("backend.h5", by_name=True)
+        template_model.load_weights("./datasets/backend.h5", by_name=True)
 
     train_model = template_model
 
@@ -66,5 +66,3 @@ def create_model(
     train_model.compile(loss=dummy_loss, optimizer=optimizer)
 
     return train_model, infer_model
-
-
