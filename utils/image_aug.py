@@ -18,7 +18,7 @@ import math
 
 class ImageAugmentation:
     def __init__(self):
-        self.categories = ['lighting']  # add transform color and distortion
+        self.categories = ['lighting', 'distortion']  # add transform color and distortion
         self.categories_limit = [2, 1, 1, 2, 2]
         self.operations = {}
 
@@ -132,7 +132,7 @@ def color_increase_channel(image, channel=rand.randint(0, 3), value=rand.uniform
     return im
 
 
-def distortion_line(image, dimension=rand.randint(0, 2), occurance=rand.randint(10, 30), thickness=1):
+def _leave_distortion_line(image, dimension=rand.randint(0, 2), occurance=rand.randint(10, 30), thickness=1):
     data = np.array(image)
     if dimension == 0 or dimension == 2:
         for i in range(0, np.size(data, 0), occurance):
@@ -146,7 +146,7 @@ def distortion_line(image, dimension=rand.randint(0, 2), occurance=rand.randint(
     return im
 
 
-def distortion_random_erase(image, size=rand.randint(1, 3), frequency=rand.randint(100, 200), color=(255, 255, 255)):
+def leave_distortion_random_erase(image, size=rand.randint(1, 3), frequency=rand.randint(100, 200), color=(255, 255, 255)):
     for i in range(frequency):
         x = rand.randint(1, image.size[0] - 1)
         y = rand.randint(1, image.size[1] - 1)
@@ -155,14 +155,14 @@ def distortion_random_erase(image, size=rand.randint(1, 3), frequency=rand.randi
     return image
 
 
-def distortion_pixelate(image, size=rand.randint(100, 200)):
+def distortion_pixelate(image, size=rand.randint(350, 500)):
     # Resize smoothly down to 16x16 pixels
     img = image.resize((size, size), resample=Image.BILINEAR)
     # Scale back up using NEAREST to original size
     return img.resize(image.size, Image.NEAREST)
 
 
-def distortion_sp(image, frequency=rand.randint(1000, 5000)):
+def distortion_sp(image, frequency=rand.randint(500, 2500)):
     for i in range(frequency):
         x = rand.randint(1, image.size[0] - 1)
         y = rand.randint(1, image.size[1] - 1)
@@ -183,19 +183,19 @@ def print_bounding_boxes(image, boxes, thickness=2):
     return image
 
 
-def lighting_saturation(image, level=rand.uniform(0.5, 1.5)):
+def lighting_saturation(image, level=rand.uniform(0.8, 1.4)):
     return ImageEnhance.Color(image).enhance(level)
 
 
-def lighting_sharpness(image, level=rand.uniform(0.5, 1.5)):
+def lighting_sharpness(image, level=rand.uniform(0.8, 1.4)):
     return ImageEnhance.Sharpness(image).enhance(level)
 
 
-def lighting_brightness(image, level=rand.uniform(0.5, 1.5)):
+def lighting_brightness(image, level=rand.uniform(0.8, 1.3)):
     return ImageEnhance.Brightness(image).enhance(level)
 
 
-def lighting_contrast(image, level=rand.uniform(0.5, 1.5)):
+def lighting_contrast(image, level=rand.uniform(0.8, 1.4)):
     return ImageEnhance.Contrast(image).enhance(level)
 
 
@@ -215,15 +215,15 @@ def filters_unshaprp(image, radius=rand.randint(1, 8), percent=rand.randint(100,
     return image.filter(ImageFilter.UnsharpMask(radius, percent, 1))
 
 
-def filters_edge(image):
+def leave_filters_edge(image):
     return image.filter(ImageFilter.EDGE_ENHANCE_MORE())
 
 
-def filters_detail(image):
+def leave_filters_detail(image):
     return image.filter(ImageFilter.DETAIL())
 
 
-def filters_autocontrast(image, threshold=rand.randint(1, 5)):
+def leave_filters_autocontrast(image, threshold=rand.randint(1, 3)):
     return ImageOps.autocontrast(image, threshold)
 
 

@@ -7,7 +7,7 @@ from utils.image_aug import ImageAugmentation
 import random
 from PIL import Image
 import copy
-
+import os
 
 class GenerateBatch(Sequence):
     # Downsample: # ratio between network input's size and network output's size, 32 for YOLOv3
@@ -150,36 +150,41 @@ class GenerateBatch(Sequence):
         # Open image
         pil_image = Image.open(image_name).convert('RGB')
 
-        # Perform random crop with upper bounds of 1152
-        if pil_image.size[0] > 1152 and pil_image.size[1] > 1152:
-            rand_x_width = random.randint(576, 1152)
-            rand_y_height = random.randint(576, 1152)
+        # Perform random crop with upper bounds of 1152 - Temporarily commented out as performed cropping outside of application
+        '''if pil_image.size[0] > 1152 and pil_image.size[1] > 1152:
+            rand_x_width = 576
+            rand_y_height = 576
+            minx = random.randint(1, pil_image.size[0] - rand_x_width)
+            miny = random.randint(1, pil_image.size[1] - rand_y_height)
+        else:
+            rand_x_width = 576
+            rand_y_height = 576
             minx = random.randint(1, pil_image.size[0] - rand_x_width)
             miny = random.randint(1, pil_image.size[1] - rand_y_height)
 
-            maxx = minx + rand_x_width
-            maxy = miny + rand_y_height
+        maxx = minx + rand_x_width
+        maxy = miny + rand_y_height
 
-            box = (minx, miny, maxx, maxy)
-            pil_image = pil_image.crop(box)
+        box = (minx, miny, maxx, maxy)
+        pil_image = pil_image.crop(box)
 
-            new_boxes = []
+        new_boxes = []
 
-            for bounding in boxes:
-                x_min = bounding['xmin']
-                x_max = bounding['xmax']
-                y_min = bounding['ymin']
-                y_max = bounding['ymax']
+        for bounding in boxes:
+            x_min = bounding['xmin']
+            x_max = bounding['xmax']
+            y_min = bounding['ymin']
+            y_max = bounding['ymax']
 
-                if x_min >= minx and x_min <= maxx and x_max >= minx and x_max <= maxx and y_min >= miny and y_min <= maxy and y_max >= miny and y_max <= maxy:
-                    temp_box = copy.deepcopy(bounding)
-                    temp_box['ymin'] = y_min - miny
-                    temp_box['xmin'] = x_min - minx
-                    temp_box['ymax'] = y_max - miny
-                    temp_box['xmax'] = x_max - minx
-                    new_boxes.append(temp_box)
+            if x_min >= minx and x_min <= maxx and x_max >= minx and x_max <= maxx and y_min >= miny and y_min <= maxy and y_max >= miny and y_max <= maxy:
+                temp_box = copy.deepcopy(bounding)
+                temp_box['ymin'] = y_min - miny
+                temp_box['xmin'] = x_min - minx
+                temp_box['ymax'] = y_max - miny
+                temp_box['xmax'] = x_max - minx
+                new_boxes.append(temp_box)
 
-            boxes = new_boxes
+        boxes = new_boxes'''
 
         # Original dimensions of image
         width_ = pil_image.size[0]
@@ -189,7 +194,8 @@ class GenerateBatch(Sequence):
         new_w, new_h, pil_image = aug.transform_resize_image(pil_image, net_w)
 
         # Perform image augmentation
-        pil_image = self.perform_augmentation.randomise_image(pil_image)
+        if random.randint(0, 100) > 2:
+            pil_image = self.perform_augmentation.randomise_image(pil_image)
 
         # Increase to network size
         image = Image.new('RGB', (net_w, net_h), (255, 255, 255))
@@ -199,7 +205,7 @@ class GenerateBatch(Sequence):
         # Apply transformation augmentations
         scale = 1  # Scale performed by randomly cropping
         flip = random.randint(0, 1)
-        rotate = 0
+        rotate = random.randint(0, 25)
 
         # Scale
         pil_image = aug.transform_zoom(pil_image, scale)
@@ -246,3 +252,17 @@ class GenerateBatch(Sequence):
             anchors += [anchor.xmax, anchor.ymax]
 
         return anchors
+
+    def load_annotation(self, i):
+        annots = []
+
+        for obj in self.instances[i]['object']:
+            annot = [obj['xmin'], obj['ymin'], obj['xmax'], obj['ymax'], self.labels.index(obj['name'])]
+            annots += [annot]
+
+        if len(annots) == 0: annots = [[]]
+
+        return np.array(annots)
+
+    def load_image(self, i):
+        return cv2.imread(self.instances[i]['filename'])

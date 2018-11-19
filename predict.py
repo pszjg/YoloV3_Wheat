@@ -1,6 +1,6 @@
 from utils import data_loader
 from model import model_create
-import os
+import os, sys
 import argparse
 import json
 import numpy as np
@@ -11,6 +11,8 @@ from colorama import init, Fore
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 import shutil
+from keras.utils import plot_model
+from contextlib import redirect_stdout
 
 def _main_(args):
     config_path = args.conf
@@ -23,12 +25,13 @@ def _main_(args):
     makedirs(output_path)
     makedirs(output_path + "/annots/")
     makedirs(output_path + "/images/")
+    makedirs(output_path + "/dl_annots/")
 
     ###############################
     #   Set some parameterW
     ###############################
     net_h, net_w = 576, 576  # a multiple of 32, the smaller the faster
-    obj_thresh, nms_thresh = 0.5, 0.2
+    obj_thresh, nms_thresh = 0.2, 0.2
 
     # Load Annotated data
     train_ints, valid_ints, labels, max_box_per_image = data_loader.create_training_instances(
@@ -64,6 +67,14 @@ def _main_(args):
         optimiser="Adam",
     )
 
+    '''os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin/'
+    print(model.summary())
+    with open('./modelsummary.txt', 'w') as f:
+        with redirect_stdout(f):
+            model.summary()
+    plot_model(model, to_file='./model.png')
+    input("Press Enter to continue...")'''
+
     ###############################
     #   Predict bounding boxes
     ###############################
@@ -76,12 +87,16 @@ def _main_(args):
         image_paths += [input_path]
 
     image_paths = [inp_file for inp_file in image_paths if (inp_file[-4:] in ['.jpg', '.png', 'JPEG', '.JPG'])]
-
+    num_files = len(image_paths)
+    counter = 1
     # the main loop
     for image_path in image_paths:
         file_name, file_ext = os.path.splitext(image_path)
         file_name = file_name.replace(input_path, "")
-        print(file_name)
+        
+        sys.stdout.write("\r{0}".format(":: Processing image " + str(counter) + " / " + str(num_files)))
+        sys.stdout.flush()
+        counter += 1
 
         image = cv2.imread(image_path)
         image_h, image_w, _ = image.shape
@@ -93,13 +108,14 @@ def _main_(args):
         do_nms(boxes, nms_thresh)
 
         # draw bounding boxes on the image using labels
-        draw_boxes(image, boxes, config['model']['labels'], obj_thresh)
+        draw_boxes(image, boxes, config['model']['labels'], obj_thresh, image_w, True)
 
         # write the image with bounding boxes to file
         cv2.imwrite(output_path + "/dl_annots/" + file_name + ".jpg", np.uint8(image))
 
         _write_xml(output_path + "/images/", file_name + file_ext, output_path + "/annots/", file_name + ".xml", boxes, image_w, image_h, config['model']['labels'], obj_thresh)
         shutil.copy(image_path, output_path + "/images/" + file_name + file_ext)
+    sys.stdout.write("\n")
 
 
 def _write_xml(image_directory, filename, save_path, save_name, boxes, img_width, img_height, labels, obj_thresh):

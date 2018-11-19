@@ -59,7 +59,8 @@ def bbox_iou(box1, box2):
     return float(intersect) / union
 
 
-def draw_boxes(image, boxes, labels, obj_thresh, quiet=True):
+def draw_boxes(image, boxes, labels, obj_thresh, width, probability=False, quiet=True):
+    num_boxes = 0
     for box in boxes:
         label_str = ''
         label = -1
@@ -68,31 +69,50 @@ def draw_boxes(image, boxes, labels, obj_thresh, quiet=True):
             if box.classes[i] > obj_thresh:
                 if label_str != '':
                     label_str += ', '
-                label_str += (labels[i] + ' ' + str(round(box.get_score()*100, 2)) + '%')
+                #label_str += (labels[i] + ' ' + str(round(box.get_score()*100, 2)) + '%')
+                label_str += (str(round(box.get_score() * 100, 2)) + '%')
                 label = i
             if not quiet:
                 print(label_str)
                 
         if label >= 0:
             cv2.rectangle(img=image, pt1=(box.xmin, box.ymin), pt2=(box.xmax, box.ymax), color=get_color(label), thickness=2)
+            num_boxes += 1
+            if probability:
+                text_size = cv2.getTextSize(label_str, cv2.FONT_HERSHEY_SIMPLEX, 1, 5)
 
-            '''            
-            text_size = cv2.getTextSize(label_str, cv2.FONT_HERSHEY_SIMPLEX, 1, 5)
-            
-            width, height = text_size[0][0], text_size[0][1]   
-            
-            region = np.array([[box.xmin-3,        box.ymin], 
-                               [box.xmin-3,        box.ymin-height-26],
-                               [box.xmin+width+13, box.ymin-height-26],
-                               [box.xmin+width+13, box.ymin]], dtype='int32')
-            
-            cv2.fillPoly(img=image, pts=[region], color=get_color(label))
-            cv2.putText(img=image,
-                        text=label_str,
-                        org=(box.xmin+13, box.ymin - 13),
-                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        fontScale=0.5,
-                        color=(0,0,0),
-                        thickness=2)'''
-        
-    return image          
+                width, height = text_size[0][0], text_size[0][1]
+
+                '''region = np.array([[box.xmin-3,        box.ymin],
+                                   [box.xmin-3,        box.ymin-height-26],
+                                   [box.xmin+width+13, box.ymin-height-26],
+                                   [box.xmin+width+13, box.ymin]], dtype='int32')
+
+                cv2.fillPoly(img=image, pts=[region], color=get_color(label))'''
+                cv2.putText(img=image,
+                            text=label_str,
+                            org=(box.xmin+13, box.ymin - 13),
+                            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                            fontScale=0.5,
+                            color=(0,0,0),
+                            thickness=2)
+
+    #Write label:
+    font_scale = 0.8
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    # set the rectangle background to white
+    rectangle_bgr = (255, 255, 255)
+    # set some text
+    text = "Stomata count: " + str(num_boxes)
+    # get the width and height of the text box
+    (text_width, text_height) = cv2.getTextSize(text, font, fontScale=font_scale, thickness=1)[0]
+    # set the text start position
+    text_offset_x = image.shape[1] - (text_width + 25)
+    text_offset_y = 25
+    # make the coords of the box with a small padding of two pixels
+    box_coords = ((text_offset_x - 15, text_offset_y - 25), (text_offset_x + text_width + 15, text_offset_y + text_height))
+    cv2.rectangle(image, box_coords[0], box_coords[1], rectangle_bgr, cv2.FILLED)
+    cv2.putText(image, text, (text_offset_x, text_offset_y), font, fontScale=font_scale, color=(0, 0, 0), thickness=1)
+
+
+    return image
